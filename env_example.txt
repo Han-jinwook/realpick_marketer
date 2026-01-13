@@ -1,0 +1,26 @@
+# 리얼픽 마케팅 자동화 시스템 환경변수 예시
+# 이 파일을 .env로 복사하고 실제 값으로 변경하세요
+
+# YouTube Data API v3
+# https://console.developers.google.com/apis/credentials 에서 발급
+YOUTUBE_API_KEY=your_youtube_api_key_here
+
+# Google Gemini AI API
+# https://ai.google.dev/ 에서 발급
+GEMINI_API_KEY=your_gemini_api_key_here
+
+# Gmail SMTP 설정 (파트너십 이메일 발송용)
+# Gmail 앱 비밀번호 사용 권장
+SENDER_EMAIL=your_email@gmail.com
+SENDER_PASSWORD=your_gmail_app_password
+
+# Supabase 설정 (리얼픽 앱과 동일한 DB 사용)
+# 리얼픽 앱의 환경변수와 동일한 값 사용
+SUPABASE_URL=https://your-project.supabase.co
+SUPABASE_KEY=your_supabase_anon_key
+
+# 선택사항: 로깅 레벨
+LOG_LEVEL=INFO
+
+# 선택사항: 개발 모드
+DEBUG_MODE=false
