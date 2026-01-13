@@ -1,56 +1,37 @@
-# 리얼픽 마케팅 자동화 시스템 의존성
+# 리얼픽 마케팅 자동화 시스템 필수 의존성
 
 # Streamlit 웹 앱
-streamlit==1.29.0
-streamlit-option-menu==0.3.6
+streamlit
+streamlit-option-menu
 
 # 데이터 처리
-pandas==2.1.4
-numpy==1.24.3
+pandas
+numpy
 
 # YouTube API
-google-api-python-client==2.108.0
-google-auth-httplib2==0.1.1
-google-auth-oauthlib==1.1.0
+google-api-python-client
+google-auth-httplib2
+google-auth-oauthlib
 
 # Gemini AI
-google-generativeai==0.3.2
+google-generativeai
 
-# 웹 크롤링
-requests==2.31.0
-beautifulsoup4==4.12.2
-selenium==4.15.2
-youtube-transcript-api==0.6.1
+# 웹 크롤링 및 통신
+requests
+beautifulsoup4
+youtube-transcript-api
 
 # 이메일 발송
-secure-smtplib==0.1.1
+secure-smtplib
 
-# 데이터베이스 (Firebase로 변경 중)
-# supabase==2.0.2
-# postgrest==0.13.0
-firebase-admin==6.4.0
-
-# 스케줄링
-schedule==1.2.0
-apscheduler==3.10.4
+# 데이터베이스
+firebase-admin
 
 # 유틸리티
-python-dotenv==1.0.0
-uuid==1.30
-python-dateutil==2.8.2
+python-dotenv
+python-dateutil
+loguru
 
-# 로깅
-loguru==0.7.2
-
-# 데이터 시각화 (Streamlit용)
-plotly==5.17.0
-altair==5.2.0
-
-# 텍스트 처리
-nltk==3.8.1
-konlpy==0.6.0
-
-# 개발 도구
-pytest==7.4.3
-black==23.11.0
-flake8==6.1.0
+# 시각화
+plotly
+altair
