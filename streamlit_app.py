@@ -13,7 +13,7 @@ from dotenv import load_dotenv
 
 # 로컬 환경 로드
 if os.path.exists(".env"):
-load_dotenv()
+    load_dotenv()
 
 def get_api_key(key_name):
     if key_name in st.secrets:
@@ -131,20 +131,20 @@ if "유튜버 모집" in module:
         st.markdown('</div>', unsafe_allow_html=True)
 
         if st.session_state.show_details:
-                if latest_results and 'channels' in latest_results:
-                    video_list = []
+            if latest_results and 'channels' in latest_results:
+                video_list = []
                 channel_map = {}
                 
                 for kw, data in latest_results['channels'].items():
-                        if data['status'] == 'success':
+                    if data['status'] == 'success':
                         for v in data.get('videos', []):
                             v_count = int(v.get('view_count', 0))
                             s_count = int(v.get('subscriber_count', '0'))
                             view_str = f"{v_count/10000:.1f}만" if v_count >= 10000 else (f"{v_count/1000:.1f}천" if v_count >= 1000 else str(v_count))
                             sub_str = f"{s_count/10000:.1f}만" if s_count >= 10000 else (f"{s_count/1000:.1f}천" if s_count >= 1000 else str(s_count))
                             subtitle_status = '<span class="status-badge status-available">있음</span>' if v.get('has_subtitle') else '<span class="status-badge status-unavailable">없음</span>'
-
-                                video_list.append({
+                            
+                            video_list.append({
                                 "키워드": kw, "채널명": v['channel_title'], "제목": v['title'],
                                 "조회수": view_str, "자막": subtitle_status, "날짜": v['published_at'][:10], 
                                 "링크": v['video_url'], "video_id": v['video_id'], "has_subtitle": v.get('has_subtitle')
@@ -178,8 +178,9 @@ if "유튜버 모집" in module:
                     if st.button("Gemini AI로 미션 생성하기", type="primary"):
                         gemini_api = get_api_key('GEMINI_API_KEY')
                         youtube_api = get_api_key('YOUTUBE_API_KEY')
-                        if not gemini_api: st.error("Gemini API 키가 없습니다.")
-            else:
+                        if not gemini_api: 
+                            st.error("Gemini API 키가 없습니다.")
+                        else:
                             with st.spinner("자막 분석 중..."):
                                 try:
                                     from test_crawler import SimpleYouTubeCrawler
@@ -196,10 +197,14 @@ if "유튜버 모집" in module:
                                                     st.write(f"**설명:** {m['description']}")
                                                     st.write(f"**선택지:** {', '.join(m['options'])}")
                                                     st.button(f"미션 {idx} 승인", key=f"app_{idx}")
-                                        else: st.error("분석 실패")
-                                    else: st.error("자막 추출 실패")
-                                except Exception as e: st.error(f"오류: {e}")
-                else: st.info("자막 있는 영상 없음")
+                                        else: 
+                                            st.error("분석 실패")
+                                    else: 
+                                        st.error("자막 추출 실패")
+                                except Exception as e: 
+                                    st.error(f"오류: {e}")
+                else: 
+                    st.info("자막 있는 영상 없음")
                 st.markdown('</div>', unsafe_allow_html=True)
 
                 st.markdown('<div class="section-card">', unsafe_allow_html=True)
@@ -210,4 +215,5 @@ if "유튜버 모집" in module:
                     c_html += f'<td>{info["이메일"]}</td></tr>'
                 c_html += '</tbody></table></div>'
                 st.markdown(c_html, unsafe_allow_html=True)
-            else: st.warning("데이터 없음")
+            else: 
+                st.warning("데이터 없음")
