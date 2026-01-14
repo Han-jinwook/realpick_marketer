@@ -1,6 +1,6 @@
 """
 YouTube 크롤링 테스트 스크립트
-자동 생성 자막 및 번역 자막 수집 기능을 극대화했습니다.
+유튜브의 모든 자막(수동, 자동 생성, 자동 번역)을 강제로 찾아내는 고성능 버전입니다.
 """
 
 import os
@@ -9,10 +9,10 @@ import re
 from datetime import datetime, timedelta
 import json
 from typing import List, Dict, Optional
-from youtube_transcript_api import YouTubeTranscriptApi
+from youtube_transcript_api import YouTubeTranscriptApi, TranscriptsDisabled, NoTranscriptFound
 
 class SimpleYouTubeCrawler:
-    """YouTube 크롤러 (자막 수집 기능 특화)"""
+    """YouTube 크롤러 (자막 수집 최적화)"""
     
     def __init__(self, api_key: str):
         self.api_key = api_key
@@ -25,38 +25,44 @@ class SimpleYouTubeCrawler:
         return match.group(0) if match else "N/A"
 
     def check_subtitle_availability(self, video_id: str) -> bool:
-        """영상에 어떤 형태의 자막(자동 생성 포함)이라도 있는지 확인"""
+        """어떤 언어든, 자동 생성이든 자막이 하나라도 있는지 끝까지 확인"""
         try:
             transcript_list = YouTubeTranscriptApi.list_transcripts(video_id)
-            # 수동 자막이나 자동 생성 자막 중 하나라도 있으면 True
+            # 리스트가 존재하면 수동/자동 자막이 있다는 뜻입니다.
             return True
-        except Exception:
+        except (TranscriptsDisabled, NoTranscriptFound):
+            # 자막 기능 자체가 꺼져있거나 없는 경우
+            return False
+        except Exception as e:
+            # 그 외 차단 등의 사유로 못 가져오는 경우
+            print(f"자막 체크 중 예외 발생 ({video_id}): {str(e)}")
             return False
 
     def get_transcript(self, video_id: str) -> Optional[str]:
-        """모든 종류의 자막을 한국어로 추출"""
+        """모든 수단을 동원해 자막 내용을 텍스트로 추출"""
         try:
             transcript_list = YouTubeTranscriptApi.list_transcripts(video_id)
             
-            # 1. 한국어 자막(수동 또는 자동 생성) 시도
+            # 시도 순서:
+            # 1. 한국어 (수동/자동)
+            # 2. 영어 (수동/자동) -> 한국어 번역
+            # 3. 그 외 존재하는 아무 자막 -> 한국어 번역
+            
             try:
-                transcript = transcript_list.find_transcript(['ko']).fetch()
+                # 1단계: 한국어 시도
+                transcript = transcript_list.find_transcript(['ko', 'ko-KR', 'ko-Hans', 'ko-Hant']).fetch()
             except:
                 try:
-                    # 2. 영어 자막을 한국어로 자동 번역
+                    # 2단계: 영어 가져와서 한국어로 번역
                     transcript = transcript_list.find_transcript(['en']).translate('ko').fetch()
                 except:
-                    try:
-                        # 3. 그 외 어떤 언어든 자막이 있다면 한국어로 번역 시도
-                        first_transcript = next(iter(transcript_list))
-                        transcript = first_transcript.translate('ko').fetch()
-                    except:
-                        # 4. 최후의 수단: 그냥 원본 자막 그대로 가져오기
-                        transcript = next(iter(transcript_list)).fetch()
+                    # 3단계: 아무거나 가져와서 한국어로 번역
+                    first_ts = next(iter(transcript_list))
+                    transcript = first_ts.translate('ko').fetch()
             
             return " ".join([t['text'] for t in transcript])
         except Exception as e:
-            print(f"자막 수집 실패 ({video_id}): {str(e)}")
+            print(f"자막 최종 추출 실패 ({video_id}): {str(e)}")
             return None
 
     def get_channel_info(self, channel_id: str) -> Optional[Dict]:
@@ -103,7 +109,8 @@ class SimpleYouTubeCrawler:
                     video_id = item['id']['videoId']
                     v_stats = self.get_video_statistics(video_id)
                     c_info = self.get_channel_info(item['snippet']['channelId'])
-                    # 자막 여부 체크
+                    
+                    # 여기가 핵심: 자막 여부 체크
                     has_subtitle = self.check_subtitle_availability(video_id)
                     
                     videos.append({
