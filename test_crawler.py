@@ -1,31 +1,63 @@
 """
 YouTube 크롤링 테스트 스크립트
-키워드 기반 검색 기능을 강화하고 이메일 추출 로직을 추가했습니다.
+키워드 기반 검색 및 자막 여부 확인 기능을 포함합니다.
 """
 
 import os
 import requests
-import re
 from datetime import datetime, timedelta
 import json
 from typing import List, Dict, Optional
+from youtube_transcript_api import YouTubeTranscriptApi
 
 class SimpleYouTubeCrawler:
-    """YouTube 크롤러 (키워드 검색 및 이메일 추출 지원)"""
+    """YouTube 크롤러 (키워드 검색, 이메일 추출, 자막 확인 지원)"""
     
     def __init__(self, api_key: str):
         self.api_key = api_key
         self.base_url = "https://www.googleapis.com/youtube/v3"
         
     def extract_email(self, text: str) -> Optional[str]:
-        """텍스트에서 이메일 주소 추출 (정규식 사용)"""
-        if not text: return None
+        """텍스트에서 이메일 주소 추출"""
+        if not text: return "N/A"
+        import re
         email_pattern = r'[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}'
         match = re.search(email_pattern, text)
         return match.group(0) if match else "N/A"
 
+    def check_subtitle_availability(self, video_id: str) -> bool:
+        """영상에 한글 자막이 있는지 확인"""
+        try:
+            transcript_list = YouTubeTranscriptApi.list_transcripts(video_id)
+            # 한국어 자막이 있는지 우선 확인
+            try:
+                transcript_list.find_transcript(['ko'])
+                return True
+            except:
+                # 한국어 자막이 없으면 수동/자동 생성된 자막 중 하나라도 있는지 확인
+                return any(t.language_code == 'ko' or t.is_generated for t in transcript_list)
+        except:
+            return False
+
+    def get_transcript(self, video_id: str) -> Optional[str]:
+        """영상 자막 텍스트 추출"""
+        try:
+            # 한국어 자막 시도 -> 실패시 영어 자막 -> 실패시 첫 번째 자막
+            try:
+                transcript = YouTubeTranscriptApi.fetch_transcript(video_id, languages=['ko'])
+            except:
+                try:
+                    transcript = YouTubeTranscriptApi.fetch_transcript(video_id, languages=['en'])
+                except:
+                    transcript_list = YouTubeTranscriptApi.list_transcripts(video_id)
+                    transcript = transcript_list.find_transcript(['ko', 'en']).fetch()
+            
+            return " ".join([t['text'] for t in transcript])
+        except:
+            return None
+
     def get_channel_info(self, channel_id: str) -> Optional[Dict]:
-        """채널의 상세 정보(설명, 구독자 수 등) 가져오기"""
+        """채널 상세 정보 가져오기"""
         url = f"{self.base_url}/channels"
         params = {
             'part': 'snippet,statistics',
@@ -42,22 +74,18 @@ class SimpleYouTubeCrawler:
                 item = data['items'][0]
                 snippet = item['snippet']
                 stats = item['statistics']
-                
                 description = snippet.get('description', '')
-                email = self.extract_email(description)
                 
                 return {
                     'subscriber_count': stats.get('subscriberCount', '0'),
-                    'description': description,
-                    'email': email,
-                    'thumbnail': snippet.get('thumbnails', {}).get('default', {}).get('url', '')
+                    'email': self.extract_email(description)
                 }
             return None
-        except Exception:
+        except:
             return None
 
     def get_video_statistics(self, video_id: str) -> Optional[Dict]:
-        """영상의 통계 정보 가져오기"""
+        """영상 통계 정보 가져오기"""
         url = f"{self.base_url}/videos"
         params = {
             'part': 'statistics',
@@ -76,11 +104,11 @@ class SimpleYouTubeCrawler:
                     'view_count': stats.get('viewCount', '0')
                 }
             return None
-        except Exception:
+        except:
             return None
     
     def search_videos_by_keyword(self, keyword: str, max_results: int = 5, days_back: int = 7) -> List[Dict]:
-        """키워드로 관련 영상 검색 및 상세 정보(이메일 포함) 수집"""
+        """키워드 검색 및 자막 여부 포함 수집"""
         print(f"🔎 키워드 검색 중: {keyword}")
         
         url = f"{self.base_url}/search"
@@ -107,20 +135,22 @@ class SimpleYouTubeCrawler:
                     video_id = item['id']['videoId']
                     channel_id = item['snippet']['channelId']
                     
-                    # 상세 정보 수집 (영상 통계 + 채널 정보)
                     v_stats = self.get_video_statistics(video_id)
                     c_info = self.get_channel_info(channel_id)
+                    has_subtitle = self.check_subtitle_availability(video_id)
                     
                     video_info = {
                         'video_id': video_id,
                         'title': item['snippet']['title'],
+                        'description': item['snippet']['description'],
                         'published_at': item['snippet']['publishedAt'],
                         'video_url': f"https://www.youtube.com/watch?v={video_id}",
                         'view_count': v_stats.get('view_count', '0') if v_stats else '0',
                         'channel_title': item['snippet']['channelTitle'],
                         'channel_id': channel_id,
                         'subscriber_count': c_info.get('subscriber_count', '0') if c_info else '0',
-                        'email': c_info.get('email', 'N/A') if c_info else 'N/A'
+                        'email': c_info.get('email', 'N/A') if c_info else 'N/A',
+                        'has_subtitle': has_subtitle
                     }
                     videos.append(video_info)
             return videos
@@ -146,8 +176,6 @@ class SimpleYouTubeCrawler:
                 }
                 results['total_videos'] += len(videos)
         
-        results['total_channels'] = len(keywords)
-        results['successful_channels'] = len([k for k, v in results['channels'].items() if v['status'] == 'success'])
         return results
     
     def save_results(self, results: Dict):
@@ -155,10 +183,3 @@ class SimpleYouTubeCrawler:
         filename = f"data/test_crawl_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
         with open(filename, 'w', encoding='utf-8') as f:
             json.dump(results, f, ensure_ascii=False, indent=2)
-
-if __name__ == "__main__":
-    api_key = os.getenv('YOUTUBE_API_KEY')
-    if api_key:
-        crawler = SimpleYouTubeCrawler(api_key)
-        res = crawler.test_crawl(["환승연애"])
-        crawler.save_results(res)

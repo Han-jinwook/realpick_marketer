@@ -11,11 +11,10 @@ import json
 import glob
 from dotenv import load_dotenv
 
-# 로컬 환경이라면 .env 파일 로드 (Streamlit Cloud에서는 st.secrets 사용)
+# 로컬 환경이라면 .env 파일 로드
 if os.path.exists(".env"):
     load_dotenv()
 
-# API 키 가져오는 함수 (로컬/서버 공통)
 def get_api_key(key_name):
     if key_name in st.secrets:
         return st.secrets[key_name]
@@ -28,7 +27,7 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# 커스텀 CSS
+# 커스텀 CSS (연하고 심플한 대시보드 스타일)
 st.markdown("""
     <style>
     .main { background-color: #f9fafb; font-family: 'Pretendard', sans-serif; }
@@ -78,6 +77,11 @@ st.markdown("""
     .stButton>button[kind="primary"]:hover {
         background-color: #1f2937;
     }
+    .status-badge {
+        padding: 2px 8px; border-radius: 12px; font-size: 0.75rem; font-weight: 600;
+    }
+    .status-available { background-color: #d1fae5; color: #065f46; }
+    .status-unavailable { background-color: #fee2e2; color: #991b1b; }
     </style>
     """, unsafe_allow_html=True)
 
@@ -125,20 +129,16 @@ if "유튜버 모집" in module:
         if start_crawl:
             if not target_keywords: st.warning("키워드를 입력해주세요.")
             else:
-                # API 키 가져오기 (st.secrets 우선)
                 api_key = get_api_key('YOUTUBE_API_KEY')
-                if not api_key:
-                    st.error("YouTube API 키가 설정되지 않았습니다. Streamlit Secrets 또는 .env를 확인해주세요.")
-                else:
-                    with st.spinner("유튜브에서 데이터를 수집 중입니다..."):
-                        try:
-                            from test_crawler import SimpleYouTubeCrawler
-                            crawler = SimpleYouTubeCrawler(api_key)
-                            results = crawler.test_crawl(target_keywords, max_results=max_vids, days_back=days_back)
-                            crawler.save_results(results)
-                            st.success("데이터 수집이 완료되었습니다.")
-                            st.rerun()
-                        except Exception as e: st.error(f"오류: {str(e)}")
+                with st.spinner("유튜브에서 데이터를 수집 중입니다..."):
+                    try:
+                        from test_crawler import SimpleYouTubeCrawler
+                        crawler = SimpleYouTubeCrawler(api_key)
+                        results = crawler.test_crawl(target_keywords, max_results=max_vids, days_back=days_back)
+                        crawler.save_results(results)
+                        st.success("데이터 수집이 완료되었습니다.")
+                        st.rerun()
+                    except Exception as e: st.error(f"오류: {str(e)}")
 
         if show_stats:
             if latest_results and 'channels' in latest_results:
@@ -154,9 +154,13 @@ if "유튜버 모집" in module:
                             view_str = f"{v_count/10000:.1f}만" if v_count >= 10000 else (f"{v_count/1000:.1f}천" if v_count >= 1000 else str(v_count))
                             sub_str = f"{s_count/10000:.1f}만" if s_count >= 10000 else (f"{s_count/1000:.1f}천" if s_count >= 1000 else str(s_count))
                             
+                            # 자막 상태 뱃지
+                            subtitle_status = '<span class="status-badge status-available">있음</span>' if v.get('has_subtitle') else '<span class="status-badge status-unavailable">없음</span>'
+                            
                             video_list.append({
                                 "키워드": kw, "채널명": v['channel_title'], "제목": v['title'],
-                                "조회수": view_str, "날짜": v['published_at'][:10], "링크": v['video_url']
+                                "조회수": view_str, "자막": subtitle_status, "날짜": v['published_at'][:10], 
+                                "링크": v['video_url'], "video_id": v['video_id'], "has_subtitle": v.get('has_subtitle')
                             })
                             
                             if v['channel_title'] not in channel_map:
@@ -173,13 +177,66 @@ if "유튜버 모집" in module:
 
                 st.markdown('<div class="section-card">', unsafe_allow_html=True)
                 st.subheader("수집 영상 목록")
-                v_html = '<table class="custom-table"><thead><tr><th>키워드</th><th>채널명</th><th>영상 제목 (클릭 시 이동)</th><th>조회수</th><th>날짜</th></tr></thead><tbody>'
+                v_html = '<table class="custom-table"><thead><tr><th>키워드</th><th>채널명</th><th>영상 제목 (클릭 시 이동)</th><th>조회수</th><th>자막</th><th>날짜</th></tr></thead><tbody>'
                 for v in video_list:
                     v_html += f'<tr><td><span class="keyword-badge">{v["키워드"]}</span></td><td>{v["채널명"]}</td>'
                     v_html += f'<td><a href="{v["링크"]}" target="_blank" class="video-link">{v["제목"]}</a></td>'
-                    v_html += f'<td>{v["조회수"]}</td><td>{v["날짜"]}</td></tr>'
+                    v_html += f'<td>{v["조회수"]}</td><td>{v["자막"]}</td><td>{v["날짜"]}</td></tr>'
                 v_html += '</tbody></table></div>'
                 st.markdown(v_html, unsafe_allow_html=True)
+
+                # AI 미션 분석 섹션 추가
+                st.markdown('<div class="section-card">', unsafe_allow_html=True)
+                st.subheader("🤖 AI 미션 자동 생성")
+                
+                # 자막이 있는 영상만 필터링
+                subtitled_videos = [v for v in video_list if v['has_subtitle']]
+                
+                if subtitled_videos:
+                    selected_video_title = st.selectbox("미션을 생성할 영상을 선택하세요", [v['제목'] for v in subtitled_videos])
+                    selected_v = next(v for v in subtitled_videos if v['제목'] == selected_video_title)
+                    
+                    if st.button("Gemini AI로 미션 생성하기", type="primary"):
+                        gemini_api = get_api_key('GEMINI_API_KEY')
+                        youtube_api = get_api_key('YOUTUBE_API_KEY')
+                        
+                        if not gemini_api:
+                            st.error("Gemini API 키가 설정되지 않았습니다.")
+                        else:
+                            with st.spinner("영상 자막을 추출하고 AI가 미션을 생성 중입니다..."):
+                                try:
+                                    from test_crawler import SimpleYouTubeCrawler
+                                    from modules.gemini_analyzer import GeminiAnalyzer
+                                    
+                                    crawler = SimpleYouTubeCrawler(youtube_api)
+                                    analyzer = GeminiAnalyzer(gemini_api)
+                                    
+                                    # 1. 자막 추출
+                                    transcript = crawler.get_transcript(selected_v['video_id'])
+                                    
+                                    if transcript:
+                                        # 2. AI 분석
+                                        analysis_result = analyzer.analyze_with_transcript(selected_v, transcript)
+                                        
+                                        if analysis_result and 'missions' in analysis_result:
+                                            st.success(f"✅ '{selected_video_title}' 영상을 기반으로 3개의 미션이 생성되었습니다!")
+                                            
+                                            for idx, mission in enumerate(analysis_result['missions'], 1):
+                                                with st.expander(f"미션 {idx}: {mission['title']}", expanded=True):
+                                                    st.write(f"**설명:** {mission['description']}")
+                                                    st.write(f"**선택지:** {', '.join(mission['options'])}")
+                                                    st.caption(f"카테고리: {mission['category']}")
+                                                    if st.button(f"미션 {idx} 승인 및 저장", key=f"approve_{idx}"):
+                                                        st.info("미션이 저장되었습니다. (DB 연동 예정)")
+                                        else:
+                                            st.error("AI 분석 결과 형식이 올바르지 않습니다.")
+                                    else:
+                                        st.error("자막 내용을 가져오는데 실패했습니다.")
+                                except Exception as e:
+                                    st.error(f"AI 분석 중 오류 발생: {str(e)}")
+                else:
+                    st.info("자막이 수집된 영상이 없습니다. 다른 키워드로 다시 시도해 보세요.")
+                st.markdown('</div>', unsafe_allow_html=True)
 
                 st.markdown('<div class="section-card">', unsafe_allow_html=True)
                 st.subheader("채널 연락처 및 분석")
@@ -191,10 +248,10 @@ if "유튜버 모집" in module:
                 c_html += '</tbody></table></div>'
                 st.markdown(c_html, unsafe_allow_html=True)
             else:
-                st.warning("수집된 데이터가 없습니다. 먼저 크롤링을 실행해주세요.")
+                st.warning("수집된 데이터가 없습니다.")
         elif latest_results:
             st.info("상세 내용을 확인하려면 '상세 항목 보기' 버튼을 눌러주세요.")
 
 st.sidebar.markdown("---")
 if st.sidebar.button("시스템 가이드"):
-    st.sidebar.info("1. 키워드와 날짜 범위를 입력하세요.\n2. 결과를 확인하고 유튜버에게 연락하세요.")
+    st.sidebar.info("1. 키워드와 날짜 범위를 입력하세요.\n2. 자막이 있는 영상을 선택해 AI 미션을 생성하세요.")
